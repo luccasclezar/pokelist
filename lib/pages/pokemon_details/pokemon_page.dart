@@ -228,63 +228,81 @@ class _PokemonHero extends StatelessWidget {
     return SizedBox(
       height: queryData.size.height,
       width: queryData.size.width,
-      child: ColoredBox(
-        color: theme.colorScheme.primary,
-        child: Stack(
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      child: Stack(
+        children: [
+          // Top colored box just to continue the illusion of a header when the
+          // user scrolls up on iOS/macOS.
+          Positioned(
+            height: queryData.size.height,
+            width: queryData.size.width,
+            child: Transform.translate(
+              offset: Offset(0, -queryData.size.height),
+              child: ColoredBox(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+
+          // Actual hero
+          ColoredBox(
+            color: theme.colorScheme.primary,
+            child: Stack(
               children: [
-                Stack(
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Transform.translate(
-                      offset: const Offset(0, -halfTranslation),
-                      child: Center(
-                        child: SizedBox.square(
-                          dimension: pokemonImageDimension,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.black12,
-                              borderRadius: BorderRadius.circular(1000),
+                    Stack(
+                      children: [
+                        Transform.translate(
+                          offset: const Offset(0, -halfTranslation),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: pokemonImageDimension,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.black12,
+                                  borderRadius: BorderRadius.circular(1000),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    Transform.translate(
-                      offset: const Offset(0, halfTranslation),
-                      child: Center(
-                        child: SizedBox.square(
-                          dimension: pokemonImageDimension,
-                          child: CachedNetworkImage(
-                            imageUrl: pokemon.largeImage,
+                        Transform.translate(
+                          offset: const Offset(0, halfTranslation),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: pokemonImageDimension,
+                              child: CachedNetworkImage(
+                                imageUrl: pokemon.largeImage,
+                              ),
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      pokemon.name!,
+                      style: theme.textTheme.displaySmall!.copyWith(
+                        color: theme.colorScheme.onPrimary,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
-                Text(
-                  pokemon.name!,
-                  style: theme.textTheme.displaySmall!.copyWith(
-                    color: theme.colorScheme.onPrimary,
+
+                // Scroll down icon
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Icon(
+                    Icons.keyboard_arrow_down_sharp,
+                    color: theme.colorScheme.onPrimary.withOpacity(.5),
+                    size: 48,
                   ),
                 ),
               ],
             ),
-
-            // Scroll down icon
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Icon(
-                Icons.keyboard_arrow_down_sharp,
-                color: theme.colorScheme.onPrimary.withOpacity(.5),
-                size: 48,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
