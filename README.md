@@ -18,4 +18,4 @@ The app is made for any screen size, from desktop to mobile.
 
 |List|Details|
 |-|-|
-|![List](./screenshots/list.png)|![Details](./screenshots/details_hero.png)|
+|![List](https://github.com/luccasclezar/pokelist/blob/main/screenshots/list.PNG?raw=true)|![Details](https://github.com/luccasclezar/pokelist/blob/main/screenshots/details_hero.PNG?raw=true)|
