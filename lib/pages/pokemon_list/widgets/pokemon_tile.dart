@@ -18,6 +18,8 @@ class PokemonTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final size = ref.watch(tileSizeProvider);
 
+    final theme = Theme.of(context);
+
     if (pokemon == null) {
       return SizedBox(
         height: size.height,
@@ -39,6 +41,9 @@ class PokemonTile extends ConsumerWidget {
       height: size.height,
       width: size.width,
       child: Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
         clipBehavior: Clip.hardEdge,
         elevation: 6,
         child: InkWell(
@@ -55,8 +60,12 @@ class PokemonTile extends ConsumerWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.black12,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(24),
+                    ),
+                    color: theme.brightness == Brightness.dark
+                        ? Colors.black26
+                        : Colors.black12,
                   ),
                   padding: const EdgeInsets.all(8),
                   child: Center(
@@ -70,7 +79,7 @@ class PokemonTile extends ConsumerWidget {
               // Name
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(8),
                   child: Text(
                     '${pokemon!.name![0].toUpperCase()}'
                     '${pokemon!.name!.substring(1)}',
