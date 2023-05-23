@@ -1,14 +1,27 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pokeapi/model/pokemon/pokemon.dart';
 import 'package:pokelist/extensions/pokemon_extensions.dart';
 import 'package:pokelist/main.dart';
 import 'package:pokelist/resources/values.dart';
 
+/// Value in 0-1 range, used to control hero banner scroll animations.
+final scrollDeltaProvider = StateProvider.autoDispose((ref) => 0.0);
+
+/// The radius used on the bottom corners of AppBar.
+const _toolbarBottomRadius = 24.0;
+
+/// The offset from the actual end of hero banner that the animations should
+/// already be ended.
+const _heroBannerAnimationEndOffset = 88.0;
+
 /// Page detailing a [Pokemon].
-class PokemonPage extends StatefulWidget {
+class PokemonPage extends ConsumerStatefulWidget {
   /// Creates a [PokemonPage] that details the passed [pokemon].
   const PokemonPage({required this.pokemon, super.key});
 
@@ -20,16 +33,38 @@ class PokemonPage extends StatefulWidget {
   final Pokemon? pokemon;
 
   @override
-  State<PokemonPage> createState() => _PokemonPageState();
+  ConsumerState<PokemonPage> createState() => _PokemonPageState();
 }
 
-class _PokemonPageState extends State<PokemonPage> {
+class _PokemonPageState extends ConsumerState<PokemonPage> {
   bool pokemonInitialized = false;
   late Pokemon pokemon;
+
+  final scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+
+    // Value in 0-1 range for the scroll related to the window's size, this is
+    // used to guide scroll animations. The _heroBannerAnimationEndOffset part
+    // is to end the animations early, as the AppBar should already be opaque
+    // when the scroll ends.
+    scrollController.addListener(
+      () {
+        final scrollEnd =
+            MediaQuery.of(context).size.height - _heroBannerAnimationEndOffset;
+        final delta = scrollController.offset / scrollEnd;
+
+        ref.read(scrollDeltaProvider.notifier).state = delta.clamp(0, 1);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -63,16 +98,58 @@ class _PokemonPageState extends State<PokemonPage> {
 
               return Scaffold(
                 extendBodyBehindAppBar: true,
-                appBar: AppBar(
-                  scrolledUnderElevation: 0,
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: theme.colorScheme.onPrimary,
+                appBar: PreferredSize(
+                  // Taken from [AppBar] implementation.
+                  preferredSize: Size.fromHeight(
+                    AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight,
+                  ),
+
+                  // It's better to scope the Consumer here as a ref.watch
+                  // updating the whole children on every scroll event was a
+                  // little too unperformant.
+                  child: Consumer(
+                    builder: (context, ref, child) {
+                      final scrollAnimation = ref.watch(scrollDeltaProvider);
+
+                      return AppBar(
+                        backgroundColor: scrollAnimation < 1
+                            ? Colors.transparent
+                            : theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        scrolledUnderElevation: 0,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(_toolbarBottomRadius),
+                          ),
+                        ),
+                        systemOverlayStyle:
+                            theme.colorScheme.primary.computeLuminance() > .5
+                                ? SystemUiOverlayStyle.dark
+                                : SystemUiOverlayStyle.light,
+                        title: Text(pokemon.name!),
+                        titleTextStyle: theme.textTheme.titleLarge!.copyWith(
+                          color: theme.colorScheme.onPrimary.withOpacity(
+                            // The title should begin the opacity animation at
+                            // 80% (.8) of the scroll animation. So:
+                            // (delta - .8) / (1 - .8) => currentValue
+                            // We just need to clamp between 0 and 1 because
+                            // when the delta is lesser than .8, the resulting
+                            // value will be < 0.
+                            ((scrollAnimation - .8) / .2).clamp(0, 1),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 body: SingleChildScrollView(
+                  controller: scrollController,
                   child: Column(
                     children: [
                       // Fullscreen title
-                      _PokemonHero(pokemon),
+                      _PokemonHero(
+                        pokemon: pokemon,
+                      ),
 
                       // Spacing
                       const SizedBox(height: 32),
@@ -120,7 +197,7 @@ class _PokemonPageState extends State<PokemonPage> {
                       const SizedBox(height: 32),
 
                       Text(
-                        'Stats',
+                        'Base Stats',
                         style: theme.textTheme.titleLarge,
                       ),
 
@@ -197,9 +274,10 @@ class _PokemonPageState extends State<PokemonPage> {
 }
 
 /// Fullscreen image and title of the Pokemon.
-class _PokemonHero extends StatelessWidget {
-  const _PokemonHero(this.pokemon);
+class _PokemonHero extends ConsumerWidget {
+  const _PokemonHero({required this.pokemon});
 
+  /// Pokemon this hero is displaying.
   final Pokemon pokemon;
 
   /// The amount of translation to offset the image from the circle background.
@@ -213,7 +291,7 @@ class _PokemonHero extends StatelessWidget {
   static const halfTranslation = translation / 2;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final queryData = MediaQuery.of(context);
     final theme = Theme.of(context);
 
@@ -224,6 +302,8 @@ class _PokemonHero extends StatelessWidget {
       queryData.size.height * .6,
       queryData.size.width - 48,
     );
+
+    final scrollDelta = ref.watch(scrollDeltaProvider);
 
     return SizedBox(
       height: queryData.size.height,
@@ -244,62 +324,82 @@ class _PokemonHero extends StatelessWidget {
           ),
 
           // Actual hero
-          ColoredBox(
-            color: theme.colorScheme.primary,
-            child: Stack(
-              children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.vertical(
+                // The border radius increases when scrolling down
+                bottom: Radius.circular(
+                  lerpDouble(0, _toolbarBottomRadius, scrollDelta)!,
+                ),
+              ),
+              color: theme.colorScheme.primary,
+            ),
+            child: Transform.translate(
+              // Add a translation animation on scroll to improve the fade
+              // effect.
+              offset: Offset(0, -scrollDelta * _heroBannerAnimationEndOffset),
+              child: Opacity(
+                // Fade out when scrolling.
+                opacity: (1 - scrollDelta).clamp(0, 1),
+                child: Stack(
                   children: [
-                    Stack(
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Transform.translate(
-                          offset: const Offset(0, -halfTranslation),
-                          child: Center(
-                            child: SizedBox.square(
-                              dimension: pokemonImageDimension,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: Colors.black12,
-                                  borderRadius: BorderRadius.circular(1000),
+                        Stack(
+                          children: [
+                            Transform.translate(
+                              offset: const Offset(
+                                0,
+                                -halfTranslation,
+                              ),
+                              child: Center(
+                                child: SizedBox.square(
+                                  dimension: pokemonImageDimension,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black12,
+                                      borderRadius: BorderRadius.circular(1000),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                        Transform.translate(
-                          offset: const Offset(0, halfTranslation),
-                          child: Center(
-                            child: SizedBox.square(
-                              dimension: pokemonImageDimension,
-                              child: CachedNetworkImage(
-                                imageUrl: pokemon.largeImage,
+                            Transform.translate(
+                              offset: const Offset(0, halfTranslation),
+                              child: Center(
+                                child: SizedBox.square(
+                                  dimension: pokemonImageDimension,
+                                  child: CachedNetworkImage(
+                                    imageUrl: pokemon.largeImage,
+                                  ),
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        Text(
+                          pokemon.name!,
+                          style: theme.textTheme.displaySmall!.copyWith(
+                            color: theme.colorScheme.onPrimary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 32),
-                    Text(
-                      pokemon.name!,
-                      style: theme.textTheme.displaySmall!.copyWith(
-                        color: theme.colorScheme.onPrimary,
+
+                    // Scroll down icon
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Icon(
+                        Icons.keyboard_arrow_down_sharp,
+                        color: theme.colorScheme.onPrimary.withOpacity(.5),
+                        size: 48,
                       ),
                     ),
                   ],
                 ),
-
-                // Scroll down icon
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_sharp,
-                    color: theme.colorScheme.onPrimary.withOpacity(.5),
-                    size: 48,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
